@@ -1,0 +1,45 @@
+# Python Cache / Build Artefakte
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Distribution / Packaging
+.Python
+env/
+venv/
+ENV/
+.venv/
+build/
+dist/
+*.egg-info/
+*.egg
+*.spec
+
+# PyInstaller
+*.manifest
+*.exe
+*.dll
+*.so
+
+# Datenbanken / Daten
+*.db
+*.sqlite3
+*.log
+*.csv
+*.zip
+*.tar
+*.tar.gz
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit Cache
+.streamlit/
