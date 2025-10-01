@@ -162,7 +162,4 @@ def process(filecontent: Any, woche: int, jahr: int) -> str:
     return java_script
 
 
-if __name__ == '__main__':
-    with duckdb.connect("file.db") as con:
-        df = con.sql(f"""SELECT '*' FROM in_prices""").df()
 
