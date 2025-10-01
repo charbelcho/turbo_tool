@@ -83,12 +83,12 @@ def transform_data_to_output(woche: int, jahr: int) -> None:
 
         output_df = pd.merge(
             left=output_df,
-            right=data_letzte_woche[['artikelnummer', 'meesenburg_vk']],
+            right=data_letzte_woche[['artikelnummer', 'bester_wettbewerber_vk']],
             suffixes=('', '_letzte_woche'),
             how='left',
             on='artikelnummer')
 
-        output_df = output_df.rename(columns={'meesenburg_vk_letzte_woche': 'preis_vorherige_kw'})
+        output_df = output_df.rename(columns={'bester_wettbewerber_vk_letzte_woche': 'preis_vorherige_kw'})
 
         output_df['prozessiert_am'] = dt.datetime.now()
         output_df = output_df.drop(columns=['tags', 'hochgeladen_am'])
@@ -160,4 +160,6 @@ def process(filecontent: Any, woche: int, jahr: int) -> str:
     transform_data_to_output(woche, jahr)
     java_script = download_excel_directly(woche, jahr)
     return java_script
+
+
 
