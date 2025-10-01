@@ -3,6 +3,7 @@ import datetime as dt
 import db_functions
 import utils
 import main
+from app import PAGE_TURBO_TOOL
 
 
 def check_if_input_exists():
@@ -49,7 +50,7 @@ if 'upload_exists' not in st.session_state:
     check_if_input_exists()
 
 
-st.title('Turbo Tool')
+st.title(PAGE_TURBO_TOOL)
 
 container = st.container(border=True)
 container.write('Daten anzeigen:')

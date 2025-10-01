@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 import db_functions
 import main
-
+from app import PAGE_DATEN_LOESCHEN
 
 def select_distinct(table: str, cols: list) -> pd.DataFrame:
     with duckdb.connect("file.db") as con:
@@ -47,7 +47,7 @@ if 'kalenderwoche_values' not in st.session_state:
 if 'in_oder_out' not in st.session_state:
     st.session_state.in_oder_out = 'Output'
 
-st.title("Daten löschen")
+st.title(PAGE_DATEN_LOESCHEN)
 
 container = st.container(border=True)
 col1, col2 = container.columns(2)
@@ -71,7 +71,7 @@ if not st.session_state.daten.empty:
 
     daten_loeschen = col2.button(f'Ausgewählte Daten löschen', use_container_width=True)
     if daten_loeschen:
-        selected_df = delete_df.loc[delete_df['delete'] == True]
+        selected_df = delete_df.loc[delete_df['delete']]
         delete_from_in_prices = db_functions.delete_where_data_df('in_prices', selected_df[['jahr', 'kalenderwoche']])
         if delete_from_in_prices:
             st.success('Die Daten wurden erfolgreich gelöscht')
