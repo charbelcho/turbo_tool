@@ -1,8 +1,6 @@
-import duckdb
 import pandas as pd
 import streamlit as st
 import db_functions
-import main
 from app import PAGE_USER_MANAGEMEMT
 
 
@@ -12,6 +10,15 @@ class Profile:
     USER = "User"
     WRITE = "Write"
     VIEW = "View"
+
+
+def after_speichern(successful):
+    if successful:
+        st.success('Die Daten wurden erfolgreich gespeichert')
+        st.session_state.user = db_functions.select(table='user', connect_to='user')
+    else:
+        st.error('Fehler beim Speichern der Daten')
+
 
 if 'user' not in st.session_state:
     st.session_state.user = db_functions.select(table='user', connect_to='user')
@@ -32,30 +39,19 @@ user_df = st.data_editor(
     key='user_editor'
 )
 
-#if not bool(st.session_state.user_editor['edited_rows']) and not len(st.session_state.user_editor['added_rows']) == 0 and not len(st.session_state.user_editor['deleted_rows']) == 0:
+
 speichern = st.button(f'Speichern', use_container_width=True)
 if speichern:
-    print(st.session_state.user_editor)
-    print(pd.DataFrame(st.session_state.user_editor['edited_rows']))
-    if bool(st.session_state.user_editor['edited_rows']):
-        update_df = pd.DataFrame(st.session_state.user_editor['edited_rows']).transpose()
-        for i, row in update_df.iterrows():
-            orig_row = st.session_state.user.iloc[i]
-            if not row.equals(orig_row):
-                break
+    if not (bool(st.session_state.user_editor['edited_rows']) or len(
+            st.session_state.user_editor['added_rows']) == 0 or len(
+            st.session_state.user_editor['deleted_rows']) == 0):
+        st.info('Daten unverändert.')
+    else:
+        if bool(st.session_state.user_editor['edited_rows']) or len(st.session_state.user_editor['deleted_rows']) > 0:
+            update_successful = db_functions.update(table='user', data=user_df, connect_to='user')
+            after_speichern(update_successful)
 
-    if len(st.session_state.user_editor['added_rows']) > 0:
-        insert_df = pd.DataFrame(st.session_state.user_editor['added_rows'])
-        insert_successful = db_functions.insert(table='user', data=insert_df, connect_to='user')
-
-        #print(user_df)
-        ##insert_successful = db_functions.insert(table='user', data=user_df, connect_to='user')
-        if insert_successful:
-            st.success('Die Daten wurden erfolgreich gespeichert')
-
-            st.session_state.user = db_functions.select(table='user', connect_to='user')
-            #st.rerun()
-        ##else:
-            ##st.error('Fehler beim Speichern der Daten')
-
-
+        if len(st.session_state.user_editor['added_rows']) > 0:
+            insert_df = pd.DataFrame(st.session_state.user_editor['added_rows'])
+            insert_successful = db_functions.insert(table='user', data=insert_df, connect_to='user')
+            after_speichern(insert_successful)

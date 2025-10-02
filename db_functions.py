@@ -6,11 +6,11 @@ def create_user_table():
         con.sql("CREATE SEQUENCE IF NOT EXISTS user_seq")
         con.sql("""CREATE TABLE IF NOT EXISTS user (
                     user_index INTEGER DEFAULT nextval('user_seq') PRIMARY KEY,
-                    vorname VARCHAR,
-                    nachname VARCHAR,
-                    email VARCHAR UNIQUE,
+                    vorname VARCHAR NOT NULL,
+                    nachname VARCHAR NOT NULL,
+                    email VARCHAR UNIQUE NOT NULL,
                     password VARCHAR,
-                    profil VARCHAR)""")
+                    profil VARCHAR NOT NULL)""")
 
 def create_in_table():
     with duckdb.connect("file.db") as con:
@@ -116,10 +116,10 @@ def insert(table: str, data: pd.DataFrame, connect_to='file') -> bool:
         except Exception as ex:
             return False
 
-def update(table: str, orig_data: pd.DataFrame, update_data: pd.DataFrame, connect_to='file') -> bool:
+def update(table: str, data: pd.DataFrame, connect_to='file') -> bool:
     with duckdb.connect(f"{connect_to}.db") as con:
         try:
-            con.sql(f"UPDATE {table} SET BY NAME SELECT * FROM data")
+            con.sql(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM data")
             return True
         except Exception as ex:
             return False
