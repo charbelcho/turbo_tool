@@ -118,7 +118,7 @@ def write_excel(woche: int, jahr: int) -> io.BytesIO:
     excel_data = excel_data.rename(columns=cols_map_out)
     excel_data = excel_data[cols_map_out_df['spalte_output_datei'].to_list() + [col_kw]]
 
-    styled = excel_data.style.apply(lambda _: utils.style_werte(excel_data, [col_kw, 'Meesenburg VK']), subset=[col_kw])
+    styled = excel_data.style.apply(lambda _: utils.style_werte(excel_data, [col_kw, 'Bester Wettbewerber VK']), subset=[col_kw])
 
     excel_buffer = io.BytesIO()
     with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
