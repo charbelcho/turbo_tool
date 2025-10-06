@@ -106,7 +106,9 @@ def write_excel(woche: int, jahr: int) -> io.BytesIO:
     excel_data = utils.format_int_to_price_format(excel_data, price_cols)
     excel_data = utils.add_euro_char(excel_data, price_cols)
 
-    col_kw = f'KW {woche - 1 if woche - 1 > 1 else 52}'
+    max_kw_last_year = utils.get_max_kw(jahr-1)
+
+    col_kw = f'KW {woche - 1 if woche - 1 > 1 else max_kw_last_year}'
 
     cols_map_out_df = db_functions.select(table='cols_map_out')
     cols_map_out_df = cols_map_out_df.sort_values(['spalte_position'])
@@ -160,6 +162,4 @@ def process(filecontent: Any, woche: int, jahr: int) -> str:
     transform_data_to_output(woche, jahr)
     java_script = download_excel_directly(woche, jahr)
     return java_script
-
-
 
