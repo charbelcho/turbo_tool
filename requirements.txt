@@ -11,3 +11,4 @@ streamlit~=1.47.1
 pywebview~=6.0
 requests~=2.32.4
 xlsxwriter~=3.2.8
+argon2-cffi~=25.1.0
