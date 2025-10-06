@@ -3,22 +3,34 @@ import datetime as dt
 import db_functions
 import utils
 import main
-from app import PAGE_TURBO_TOOL
+from app import PAGE_TURBO_TOOL, require_login
+
+
+require_login()
 
 
 def check_if_input_exists():
+    if 'jahr_hochladen_value' in st.session_state:
+        st.session_state.kalenderwoche_hochladen_values = utils.get_kalenderwochen(
+            utils.get_max_kw(st.session_state.jahr_hochladen_value))
+        st.session_state.kalenderwoche_hochladen_value = utils.get_current_kalenderwoche()
+
     if 'uploader_key' not in st.session_state:
         st.session_state.uploader_key = 0
     else:
         st.session_state.uploader_key += 1
     already_in_db = db_functions.select_where('in_prices',
-                                              {'jahr': st.session_state.jahr_hochladen_value, 'kalenderwoche': st.session_state.kalenderwoche_hochladen_value})
+                                              {'jahr': st.session_state.jahr_hochladen_value,
+                                               'kalenderwoche': st.session_state.kalenderwoche_hochladen_value})
     if not already_in_db.empty:
         st.session_state.upload_exists = True
-        st.error(f"Bereits Daten für KW: {st.session_state.kalenderwoche_hochladen_value}, Jahr: {st.session_state.jahr_hochladen_value} hochgeladen")
+        st.error(
+            f"Bereits Daten für KW: {st.session_state.kalenderwoche_hochladen_value}, Jahr: {st.session_state.jahr_hochladen_value} hochgeladen")
     else:
         st.session_state.upload_exists = False
-        st.success(f"Noch keine Daten für KW: {st.session_state.kalenderwoche_hochladen_value}, Jahr: {st.session_state.jahr_hochladen_value} hochgeladen")
+        st.success(
+            f"Noch keine Daten für KW: {st.session_state.kalenderwoche_hochladen_value}, Jahr: {st.session_state.jahr_hochladen_value} hochgeladen")
+
 
 # Initialize session state
 if 'jahr_anzeigen_value' not in st.session_state:
@@ -49,7 +61,6 @@ if 'kalenderwoche_hochladen_values' not in st.session_state:
 if 'upload_exists' not in st.session_state:
     check_if_input_exists()
 
-
 st.title(PAGE_TURBO_TOOL)
 
 container = st.container(border=True)
@@ -57,10 +68,19 @@ container.write('Daten anzeigen:')
 
 col1, col2, col3, col4, col5 = container.columns(5)
 
+
+def change_max_kw_anzeigen():
+    if 'jahr_anzeigen_value' in st.session_state:
+        st.session_state.kalenderwoche_anzeigen_values = utils.get_kalenderwochen(
+            utils.get_max_kw(st.session_state.jahr_anzeigen_value))
+        st.session_state.kalenderwoche_anzeigen_value = utils.get_current_kalenderwoche() - 1
+
+
 jahr_anzeigen = col1.selectbox(
     "Jahr",
     st.session_state.jahr_anzeigen_values,
-    key='jahr_anzeigen_value'
+    key='jahr_anzeigen_value',
+    on_change=change_max_kw_anzeigen
 )
 
 kalenderwoche_anzeigen = col2.selectbox(
@@ -75,8 +95,10 @@ in_oder_out = col3.selectbox(
     key='in_oder_out'
 )
 
-daten_anzeigen = col4.button(f'Daten für KW {st.session_state.kalenderwoche_anzeigen_value if st.session_state.kalenderwoche_anzeigen_value else "__"} anzeigen',
-                             use_container_width=True)
+daten_anzeigen = col4.button(
+    f'Daten für KW {st.session_state.kalenderwoche_anzeigen_value if st.session_state.kalenderwoche_anzeigen_value else "__"} anzeigen',
+    use_container_width=True)
+
 if daten_anzeigen:
     st.session_state.data_anzeigen = main.daten_fuer_kw_anzeigen(
         st.session_state.kalenderwoche_anzeigen_value, st.session_state.jahr_anzeigen_value,
@@ -85,7 +107,8 @@ if daten_anzeigen:
     st.dataframe(st.session_state.data_anzeigen)
 
 if st.session_state.in_oder_out == 'Output':
-    if main.write_excel(st.session_state.kalenderwoche_anzeigen_value, st.session_state.jahr_anzeigen_value) is not None:
+    if main.write_excel(st.session_state.kalenderwoche_anzeigen_value,
+                        st.session_state.jahr_anzeigen_value) is not None:
         downloaden = col5.download_button(
             label=f'Download Excel für KW {st.session_state.kalenderwoche_anzeigen_value if st.session_state.kalenderwoche_anzeigen_value else "__"}',
             data=main.write_excel(st.session_state.kalenderwoche_anzeigen_value, st.session_state.jahr_anzeigen_value),
@@ -99,7 +122,6 @@ container2 = st.container(border=True)
 container2.write('Daten hochladen für:')
 
 col6, col7, col8 = container2.columns(3)
-
 
 jahr_hochladen = col6.selectbox(
     "Jahr (Upload)",
@@ -120,9 +142,8 @@ if not st.session_state.upload_exists:
 
     if file:
         st.components.v1.html(
-                main.process(
-                    file,
-                    st.session_state.kalenderwoche_hochladen_value,
-                    st.session_state.jahr_hochladen_value
-                ), height=0, width=0)
-
+            main.process(
+                file,
+                st.session_state.kalenderwoche_hochladen_value,
+                st.session_state.jahr_hochladen_value
+            ), height=0, width=0)

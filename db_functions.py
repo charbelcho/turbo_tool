@@ -1,5 +1,8 @@
 import duckdb
 import pandas as pd
+from argon2 import PasswordHasher
+
+ph = PasswordHasher()
 
 def create_user_table():
     with duckdb.connect("user.db") as con:
@@ -9,8 +12,8 @@ def create_user_table():
                     vorname VARCHAR NOT NULL,
                     nachname VARCHAR NOT NULL,
                     email VARCHAR UNIQUE NOT NULL,
-                    password VARCHAR,
-                    profil VARCHAR NOT NULL)""")
+                    password VARCHAR NOT NULL,
+                    profil VARCHAR)""")
 
 def create_in_table():
     with duckdb.connect("file.db") as con:
@@ -87,6 +90,11 @@ def create_cols_map_out_table():
         con.sql(f"CREATE OR REPLACE TABLE cols_map_out AS SELECT * FROM df")
 
 
+def statement(stm: str, connect_to='file') -> pd.DataFrame:
+    with duckdb.connect(f"{connect_to}.db") as con:
+        return con.sql(stm).df()
+
+
 def select(table: str, connect_to='file', cols=None) -> pd.DataFrame:
     if cols is None:
         cols = []
@@ -99,13 +107,14 @@ def select_distinct(table: str, cols: list) -> pd.DataFrame:
         return con.sql(f"""SELECT distinct {','.join(cols)} FROM {table}""").df()
 
 
-def select_where(table: str, col_value: dict, cols=None) -> pd.DataFrame:
+def select_where(table: str, col_value: dict, cols=None, connect_to='file') -> pd.DataFrame:
     if cols is None:
         cols = []
-    with duckdb.connect("file.db") as con:
+    with duckdb.connect(f"{connect_to}.db") as con:
         return con.sql(f"""
             SELECT {','.join(cols) if cols else '*'} 
-            FROM {table} WHERE {" AND ".join([f"{k} = {v}" for k, v in col_value.items()])}""").df()
+            FROM {table} WHERE {" AND ".join([f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}" 
+                                              for k, v in col_value.items()])}""").df()
 
 
 def insert(table: str, data: pd.DataFrame, connect_to='file') -> bool:
@@ -120,6 +129,18 @@ def update(table: str, data: pd.DataFrame, connect_to='file') -> bool:
     with duckdb.connect(f"{connect_to}.db") as con:
         try:
             con.sql(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM data")
+            return True
+        except Exception as ex:
+            return False
+
+def update_where(table: str, cols_update, col_search_value: dict, connect_to='file') -> bool:
+    with duckdb.connect(f"{connect_to}.db") as con:
+        try:
+            con.sql(f"""
+                        UPDATE {table} SET {','.join([f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                                                          for k, v in cols_update.items()])} 
+                        WHERE {" AND ".join([f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                                                          for k, v in col_search_value.items()])}""")
             return True
         except Exception as ex:
             return False

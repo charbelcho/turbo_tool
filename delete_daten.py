@@ -1,9 +1,13 @@
 import duckdb
 import pandas as pd
 import streamlit as st
+
 import db_functions
 import main
-from app import PAGE_DATEN_LOESCHEN
+from app import PAGE_DATEN_LOESCHEN, require_login
+
+
+require_login()
 
 def select_distinct(table: str, cols: list) -> pd.DataFrame:
     with duckdb.connect("file.db") as con:
@@ -53,6 +57,7 @@ container = st.container(border=True)
 col1, col2 = container.columns(2)
 
 col1.write('Daten' if not st.session_state.daten.empty else 'Keine Daten vorhanden')
+
 
 if not st.session_state.daten.empty:
     delete_df = col1.data_editor(
