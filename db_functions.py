@@ -8,12 +8,17 @@ def create_user_table():
     with duckdb.connect("user.db") as con:
         con.sql("CREATE SEQUENCE IF NOT EXISTS user_seq")
         con.sql("""CREATE TABLE IF NOT EXISTS user (
-                    user_index INTEGER DEFAULT nextval('user_seq') PRIMARY KEY,
+                    user_index INTEGER PRIMARY KEY,
                     vorname VARCHAR NOT NULL,
                     nachname VARCHAR NOT NULL,
                     email VARCHAR UNIQUE NOT NULL,
                     password VARCHAR NOT NULL,
-                    profil VARCHAR)""")
+                    profil VARCHAR,
+                    freigeschaltet BOOL NOT NULL)""")
+        con.sql(f"""INSERT OR IGNORE INTO user (user_index, vorname, nachname, email, password, profil, freigeschaltet) VALUES
+                (0, 'Charbel', 'Chougourou', 'admin', '{ph.hash('test')}', 'Super User', 'true')""")
+        con.sql("""ALTER TABLE user ALTER COLUMN user_index SET DEFAULT nextval('user_seq')""")
+
 
 def create_in_table():
     with duckdb.connect("file.db") as con:
@@ -145,10 +150,26 @@ def update_where(table: str, cols_update, col_search_value: dict, connect_to='fi
         except Exception as ex:
             return False
 
-def delete(table: str, col_value: dict) -> bool:
-    with duckdb.connect("file.db") as con:
+def delete(table: str, connect_to='file') -> bool:
+    with duckdb.connect(f"{connect_to}.db") as con:
+        try:
+            con.sql(f"""DELETE FROM {table}""")
+            return True
+        except Exception as ex:
+            return False
+
+def delete_where(table: str, col_value: dict, connect_to='file') -> bool:
+    with duckdb.connect(f"{connect_to}.db") as con:
         try:
             con.sql(f"""DELETE FROM {table} WHERE {" AND ".join([f"{k} = {v}" for k, v in col_value.items()])}""")
+            return True
+        except Exception as ex:
+            return False
+
+def delete_where_in(table: str, col: str , values: list, connect_to='file') -> bool:
+    with duckdb.connect(f"{connect_to}.db") as con:
+        try:
+            con.sql(f"""DELETE FROM {table} WHERE {col} in ({", ".join(str(e) for e in values)})""")
             return True
         except Exception as ex:
             return False

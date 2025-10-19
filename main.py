@@ -163,3 +163,169 @@ def process(filecontent: Any, woche: int, jahr: int) -> str:
     java_script = download_excel_directly(woche, jahr)
     return java_script
 
+
+def transform_gedore(filecontent: Any):
+    if filecontent is not None:
+        raw_data = filecontent.getvalue()
+
+        byte_string = raw_data.replace(b'\x00', b'')
+        text = byte_string.decode("utf-8", errors="replace")  # ersetzt nicht-unicode-Zeichen durch �
+
+        # Ersetze alle � (Replacement Character) mit leerem String
+        clean_text = text.replace('�', '').replace('"', '')
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(clean_text)
+
+        input_df = pd.read_csv(output_file, encoding='utf-8', engine="python", sep="\t", encoding_errors='ignore',
+                               skip_blank_lines=True)
+        input_df = input_df[
+            ['Brand', 'Product', 'Code', 'Your Price', 'Tags', 'Cost Price', 'Rival Best Price', 'Your Diff.']]
+
+        cols_map_in_df = db_functions.select(table='cols_map_in')
+        cols_map_in = dict(zip(cols_map_in_df["spalte_input_datei"], cols_map_in_df["spalte_db"]))
+        input_df = input_df.rename(columns=cols_map_in)
+
+        if not input_df.empty:
+            input_df.loc[:, 'me_vk_bester_preis'] = ''
+            input_df.loc[input_df['your_price'] < input_df['rival_best_price'], 'me_vk_bester_preis'] = 'ja'
+            input_df.loc[input_df['your_price'] == input_df['rival_best_price'], 'me_vk_bester_preis'] = 'gleich'
+            input_df.loc[input_df['your_price'] > input_df['rival_best_price'], 'me_vk_bester_preis'] = 'nein'
+
+            output_df = input_df.rename(columns={'brand': 'lieferant', 'product': 'artikel', 'code': 'artikelnummer',
+                                                  'your_price': 'meesenburg_vk', 'cost_price': 'ynek',
+                                                  'rival_best_price': 'bester_wettbewerber_vk',
+                                                  'your_difference': 'vk_zum_besten_wettbewerber'})
+
+            price_cols = ['meesenburg_vk', 'ynek', 'bester_wettbewerber_vk']
+
+            excel_data = utils.format_int_to_price_format(output_df, price_cols)
+            excel_data = utils.add_euro_char(excel_data, price_cols)
+
+
+            cols_map_out_df = db_functions.select(table='cols_map_out')
+            cols_map_out_df = cols_map_out_df.sort_values(['spalte_position'])
+            cols_map_out_df = cols_map_out_df.loc[~cols_map_out_df['spalte_output_datei'].isin(['VPRS', 'YKBN'])]
+            cols_map_out = dict(zip(cols_map_out_df["spalte_db"], cols_map_out_df["spalte_output_datei"]))
+
+            excel_data = excel_data.rename(columns=cols_map_out)
+            excel_data = excel_data[cols_map_out_df['spalte_output_datei'].to_list()]
+
+
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+                excel_data.to_excel(writer, index=False, sheet_name="Ergebnisse")
+                workbook = writer.book
+                worksheet = writer.sheets["Ergebnisse"]
+
+                # Spaltenbreite automatisch anpassen
+                for i, col in enumerate(excel_data.columns):
+                    max_len = max(
+                        excel_data[col].astype(str).map(len).max(),
+                        len(col)
+                    ) + 2
+                    worksheet.set_column(i, i, max_len)
+
+            excel_buffer.seek(0)
+
+            b64 = base64.b64encode(excel_buffer.read()).decode()
+            href = f'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}'
+
+            js = f"""
+            <html>
+            <body>
+                <a id="download" href="{href}" download="geodore_ergebnisse.xlsx"></a>
+                <script>
+                    document.getElementById('download').click();
+                </script>
+            </body>
+            </html>
+            """
+            return js
+
+
+def transform_google_shopping(filecontent: Any):
+    if filecontent is not None:
+        raw_data = filecontent.getvalue()
+
+        byte_string = raw_data.replace(b'\x00', b'')
+        text = byte_string.decode("utf-8", errors="replace")  # ersetzt nicht-unicode-Zeichen durch �
+
+        # Ersetze alle � (Replacement Character) mit leerem String
+        clean_text = text.replace('�', '').replace('"', '')
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(clean_text)
+
+        input_df = pd.read_csv(output_file, encoding='utf-8', engine="python", sep="\t", encoding_errors='ignore',
+                               skip_blank_lines=True)
+        input_df = input_df[
+            ['Brand', 'Product', 'Code', 'Your Price', 'Tags', 'Cost Price', 'Rival Best Price', 'Your Diff.']]
+
+        cols_map_in_df = db_functions.select(table='cols_map_in')
+        cols_map_in = dict(zip(cols_map_in_df["spalte_input_datei"], cols_map_in_df["spalte_db"]))
+        input_df = input_df.rename(columns=cols_map_in)
+
+        if not input_df.empty:
+            input_df.loc[:, 'me_vk_bester_preis'] = ''
+            input_df.loc[input_df['your_price'] < input_df['rival_best_price'], 'me_vk_bester_preis'] = 'ja'
+            input_df.loc[input_df['your_price'] == input_df['rival_best_price'], 'me_vk_bester_preis'] = 'gleich'
+            input_df.loc[input_df['your_price'] > input_df['rival_best_price'], 'me_vk_bester_preis'] = 'nein'
+
+            output_df = input_df.rename(columns={'brand': 'lieferant', 'product': 'artikel', 'code': 'artikelnummer',
+                                                  'your_price': 'meesenburg_vk', 'cost_price': 'ynek',
+                                                  'rival_best_price': 'bester_wettbewerber_vk',
+                                                  'your_difference': 'vk_zum_besten_wettbewerber'})
+            output_df['vprs'] = output_df['tags'].apply(lambda x: utils.split_tags('VPRS', x))
+            output_df['ykbn'] = output_df['tags'].apply(lambda x: utils.split_tags('YKBN', x))
+
+            price_cols = ['meesenburg_vk', 'ynek', 'vprs', 'ykbn', 'bester_wettbewerber_vk']
+
+            excel_data = utils.format_int_to_price_format(output_df, price_cols)
+            excel_data = utils.add_euro_char(excel_data, price_cols)
+
+
+            cols_map_out_df = db_functions.select(table='cols_map_out')
+            cols_map_out_df = cols_map_out_df.sort_values(['spalte_position'])
+            cols_map_out = dict(zip(cols_map_out_df["spalte_db"], cols_map_out_df["spalte_output_datei"]))
+
+            excel_data = excel_data.rename(columns=cols_map_out)
+            excel_data = excel_data[cols_map_out_df['spalte_output_datei'].to_list()]
+
+
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+                excel_data.to_excel(writer, index=False, sheet_name="Ergebnisse")
+                workbook = writer.book
+                worksheet = writer.sheets["Ergebnisse"]
+
+                # Spaltenbreite automatisch anpassen
+                for i, col in enumerate(excel_data.columns):
+                    max_len = max(
+                        excel_data[col].astype(str).map(len).max(),
+                        len(col)
+                    ) + 2
+                    worksheet.set_column(i, i, max_len)
+
+            excel_buffer.seek(0)
+
+            b64 = base64.b64encode(excel_buffer.read()).decode()
+            href = f'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}'
+
+            js = f"""
+            <html>
+            <body>
+                <a id="download" href="{href}" download="google_shopping_ergebnisse.xlsx"></a>
+                <script>
+                    document.getElementById('download').click();
+                </script>
+            </body>
+            </html>
+            """
+            return js
+
+
+
+if __name__ == '__main__':
+    user_data = db_functions.select(table='user', connect_to='user')
+

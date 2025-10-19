@@ -1,3 +1,5 @@
+import time
+
 import duckdb
 import pandas as pd
 import streamlit as st
@@ -14,7 +16,7 @@ def select_distinct(table: str, cols: list) -> pd.DataFrame:
         return con.sql(f"""SELECT distinct {','.join(cols)} FROM {table}""").df()
 
 
-if 'daten' not in st.session_state:
+if 'daten' not in st.session_state or st.session_state.daten.empty:
     df = select_distinct('in_prices', ['jahr', 'kalenderwoche'])
     df = df.sort_values(['jahr', 'kalenderwoche'], ascending=[False, False])
     if not df.empty:
@@ -24,29 +26,29 @@ if 'daten' not in st.session_state:
     else:
         st.session_state.daten = pd.DataFrame()
 
-if 'jahr' not in st.session_state:
+if 'jahr_delete' not in st.session_state:
     if not st.session_state.daten.empty:
         jahr_df = st.session_state.daten.drop_duplicates(subset=['jahr'])['jahr']
         if not jahr_df.empty:
             jahr_df = jahr_df.iloc[0]
-        st.session_state.jahr = jahr_df
+        st.session_state.jahr_delete = jahr_df
 
-if 'jahr_values' not in st.session_state:
+if 'jahr_delete_values' not in st.session_state:
     if not st.session_state.daten.empty:
-        st.session_state.jahr_values = st.session_state.daten['jahr'].drop_duplicates().tolist()
+        st.session_state.jahr_delete_values = st.session_state.daten['jahr'].drop_duplicates().tolist()
 
-if 'kalenderwoche' not in st.session_state:
+if 'kalenderwoche_delete' not in st.session_state:
     if not st.session_state.daten.empty:
         kw_df = st.session_state.daten.drop_duplicates(subset=['kalenderwoche'])['kalenderwoche']
         if not kw_df.empty:
             kw_df = kw_df.iloc[0]
-            st.session_state.kalenderwoche = kw_df
+            st.session_state.kalenderwoche_delete = kw_df
 
-if 'kalenderwoche_values' not in st.session_state:
+if 'kalenderwoche_delete_values' not in st.session_state:
     if not st.session_state.daten.empty:
-        st.session_state.kalenderwoche_values = st.session_state.daten['kalenderwoche'].drop_duplicates().tolist()
+        st.session_state.kalenderwoche_delete_values = st.session_state.daten['kalenderwoche'].drop_duplicates().tolist()
     else:
-        st.session_state.kalenderwoche_values = []
+        st.session_state.kalenderwoche_delete_values = []
 
 if 'in_oder_out' not in st.session_state:
     st.session_state.in_oder_out = 'Output'
@@ -70,7 +72,6 @@ if not st.session_state.daten.empty:
         },
         disabled=['jahr', 'kalenderwoche'],
         hide_index=True,
-        # on_change=changer,
         key='editor'
     )
 
@@ -78,30 +79,46 @@ if not st.session_state.daten.empty:
     if daten_loeschen:
         selected_df = delete_df.loc[delete_df['delete']]
         delete_from_in_prices = db_functions.delete_where_data_df('in_prices', selected_df[['jahr', 'kalenderwoche']])
-        if delete_from_in_prices:
+        delete_from_out_prices = db_functions.delete_where_data_df('out_prices', selected_df[['jahr', 'kalenderwoche']])
+        if delete_from_in_prices and delete_from_out_prices:
             st.success('Die Daten wurden erfolgreich gelöscht')
-            st.session_state.daten = db_functions.select_distinct('in_prices', ['jahr', 'kalenderwoche']).sort_values(
-                ['jahr', 'kalenderwoche'], ascending=[False, False])
-            st.session_state.daten['delete'] = False
-            st.rerun()
         else:
             st.error('Fehler beim Löschen der Daten')
+        st.session_state.daten = db_functions.select_distinct('in_prices', ['jahr', 'kalenderwoche']).sort_values(
+            ['jahr', 'kalenderwoche'], ascending=[False, False])
+        st.session_state.daten['delete'] = False
+        time.sleep(1)
+        st.rerun()
+
+    alle_daten_loeschen = col2.button(f'Alle Daten löschen', use_container_width=True)
+    if alle_daten_loeschen:
+        delete_from_in_prices = db_functions.delete('in_prices')
+        delete_from_out_prices = db_functions.delete('out_prices')
+        if delete_from_in_prices and delete_from_out_prices:
+            st.success('Die Daten wurden erfolgreich gelöscht')
+        else:
+            st.error('Fehler beim Löschen der Daten')
+        st.session_state.daten = db_functions.select_distinct('in_prices', ['jahr', 'kalenderwoche']).sort_values(
+            ['jahr', 'kalenderwoche'], ascending=[False, False])
+        st.session_state.daten['delete'] = False
+        time.sleep(1)
+        st.rerun()
+
 
     container2 = st.container(border=True)
     col3, col4, col5, col6 = container2.columns(4)
 
     jahr = col3.selectbox(
         "Jahr",
-        st.session_state.jahr_values,
+        st.session_state.jahr_delete_values,
         key='jahr'
     )
 
-    if st.session_state.kalenderwoche_values:
-        kalenderwoche = col4.selectbox(
-            "KW",
-            st.session_state.kalenderwoche_values,
-            key='kalenderwoche'
-        )
+    kalenderwoche = col4.selectbox(
+        "KW",
+        st.session_state.kalenderwoche_delete_values,
+        key='kalenderwoche'
+    )
 
     in_oder_out = col5.selectbox(
         "Daten",
