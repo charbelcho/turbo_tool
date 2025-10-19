@@ -1,3 +1,5 @@
+import ast
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -36,6 +38,9 @@ def validate_mail_password(email, passwort):
     if users.empty:
         msg = "Kein Benutzer mit dieser Mail vergeben"
         return False, msg, None
+    elif not users.iloc[0]['freigeschaltet']:
+        msg = "Du bist noch nicht freigeschaltet. Melde die bei deinem Admin."
+        return False, msg, None
     else:
         try:
             ph.verify(users.iloc[0]['password'], passwort)
@@ -64,7 +69,8 @@ def validate_registration(email, vorname, nachname, passwort, passwort_wiederhol
         try:
             users_db = db_functions.statement("select count(*) as count from user", connect_to='user')
             d = {'vorname': [vorname], 'nachname': [nachname], 'email': [email], 'password': [ph.hash(passwort)],
-                 'profil': ['Admin' if users_db.iloc[0]['count'] == 0 else 'User']}
+                 'profil': ['Admin' if users_db.iloc[0]['count'] == 1 else 'User'],
+                 'freigeschaltet': ['true' if users_db.iloc[0]['count'] == 1 else 'false']}
             data = pd.DataFrame(data=d)
             registration_successful = db_functions.insert(table='user', data=data, connect_to='user')
             if registration_successful:
@@ -114,7 +120,13 @@ def login():
             st.success(msg)
             st.session_state.logged_in = True
             st.session_state.logged_in_user = user
-            st.switch_page('home.py')
+            if st.session_state.logged_in_user.profil == 'Admin' and not db_functions.select_where(
+                    table='user',
+                    col_value={'freigeschaltet': 'true'},
+                    connect_to='user').empty:
+                st.switch_page('user_administration.py')
+            else:
+                st.switch_page('home.py')
             st.rerun()
         else:
             st.error(msg)
@@ -163,23 +175,39 @@ if 'logged_in' not in st.session_state:
 
 sideb = st.sidebar
 
+if st.session_state.logged_in and 'logged_in_user' in st.session_state:
+    if st.session_state.logged_in_user.profil == 'Admin' or st.session_state.logged_in_user.profil == 'Super User':
+        neue_user = len(db_functions.select_where(table='user', col_value={'freigeschaltet': False}, connect_to='user'))
+
+        col1, col2 = sideb.columns([5, 1])
+        if neue_user > 0:
+            news_button = col1.button("Neuigkeiten", use_container_width=True)
+            if news_button:
+                st.switch_page("user_administration.py")
+            col2.markdown(
+                f"<div style='background:red;color:white;padding:1px 11px;border-radius:50%;text-align:center;'>{neue_user}</div>",
+                unsafe_allow_html=True)
+
+
 if not st.session_state.logged_in:
-    login_button = sideb.button("Einloggen")
+    login_button = sideb.button("Einloggen", use_container_width=True)
     if login_button:
         login()
 
-    register_button = sideb.button("Registrieren")
+    register_button = sideb.button("Registrieren", use_container_width=True)
     if register_button:
         register()
 
 if st.session_state.logged_in:
-    logout_button = sideb.button("Ausloggen")
+    logout_button = sideb.button("Ausloggen", use_container_width=True)
     if logout_button:
         logout()
 
-    change_pwd_button = sideb.button("Passwort ändern")
+    change_pwd_button = sideb.button("Passwort ändern", use_container_width=True)
     if change_pwd_button:
         change_pwd()
+
+
 
 
 # Page Titel
