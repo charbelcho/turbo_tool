@@ -9,7 +9,7 @@ import main
 from app import PAGE_DATEN_LOESCHEN, require_login
 
 
-#require_login()
+require_login()
 
 def select_distinct(table: str, cols: list) -> pd.DataFrame:
     with duckdb.connect("file.db") as con:

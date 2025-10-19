@@ -1,4 +1,3 @@
-import time
 
 import streamlit as st
 import datetime as dt
@@ -8,7 +7,7 @@ import main
 from app import PAGE_TURBO_TOOL, require_login
 
 
-#require_login()
+require_login()
 
 def check_if_input_exists_jahr():
     st.session_state.upload_exists = None

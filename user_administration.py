@@ -8,7 +8,7 @@ import db_functions
 from app import PAGE_USER_MANAGEMEMT, require_login
 
 
-#require_login()
+require_login()
 
 
 class Profile:
