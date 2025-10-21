@@ -141,11 +141,11 @@ if daten_anzeigen:
     st.dataframe(st.session_state.data_anzeigen)
 
 if st.session_state.in_oder_out == 'Output':
-    if main.write_excel(st.session_state.kalenderwoche_anzeigen_value,
-                        st.session_state.jahr_anzeigen_value) is not None:
+    if main.prepare_date_for_excel(st.session_state.kalenderwoche_anzeigen_value,
+                                   st.session_state.jahr_anzeigen_value) is not None:
         downloaden = col5.download_button(
             label=f'Download Excel für KW {st.session_state.kalenderwoche_anzeigen_value if st.session_state.kalenderwoche_anzeigen_value else "__"}',
-            data=main.write_excel(st.session_state.kalenderwoche_anzeigen_value, st.session_state.jahr_anzeigen_value),
+            data=main.prepare_date_for_excel(st.session_state.kalenderwoche_anzeigen_value, st.session_state.jahr_anzeigen_value),
             file_name="data.xlsx",
             on_click='ignore',
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

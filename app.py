@@ -26,13 +26,13 @@ db_functions.create_cols_map_out_table()
 
 
 
-def require_login():
+def require_login() -> None:
     if not st.session_state.logged_in:
         st.warning("Bitte zuerst einloggen.")
         st.switch_page("startseite.py")
 
 
-def validate_mail_password(email, passwort):
+def validate_mail_password(email: str, passwort: str) -> (bool, str, User | None):
     users = db_functions.select_where(table='user', col_value={'email': email}, connect_to='user')
     if users.empty:
         msg = "Kein Benutzer mit dieser Mail vergeben"
@@ -50,7 +50,7 @@ def validate_mail_password(email, passwort):
             return False, msg, None
 
 
-def validate_registration(email, vorname, nachname, passwort, passwort_wiederholen):
+def validate_registration(email: str, vorname: str, nachname: str, passwort: str, passwort_wiederholen: str) -> (bool, str):
     users = db_functions.select_where(table='user', col_value={'email': email}, connect_to='user')
     if not users.empty:
         msg = "Bereits ein Benutzer mit dieser Mail vergeben"
@@ -80,7 +80,7 @@ def validate_registration(email, vorname, nachname, passwort, passwort_wiederhol
             return False, msg
 
 
-def validate_edit_passwort(email, passwort, passwort_wiederholen):
+def validate_edit_passwort(email: str, passwort: str , passwort_wiederholen: str) -> (bool, str):
     if not 'logged_in' in st.session_state:
         msg = 'Kein User eingeloggt'
         return False, msg
@@ -109,7 +109,7 @@ def validate_edit_passwort(email, passwort, passwort_wiederholen):
 
 
 @st.dialog("Login")
-def login():
+def login() -> None:
     email = st.text_input(label="E-Mail", key='email')
     passwort = st.text_input(label="Passwort", type='password', key='password')
 
@@ -133,7 +133,7 @@ def login():
 
 
 @st.dialog("Registrieren")
-def register():
+def register() -> None:
     email = st.text_input(label="E-Mail", key='email')
     vorname = st.text_input(label="Vorname", key='vorname')
     nachname = st.text_input(label="Nachname", key='nachname')
@@ -150,7 +150,7 @@ def register():
 
 
 @st.dialog("Passwort ändern")
-def change_pwd():
+def change_pwd() -> None:
     st.session_state.change_pwd_email = st.session_state.logged_in_user.email
     email = st.text_input(label="E-Mail", key='change_pwd_email', disabled=True, )
     passwort = st.text_input(label="Neues Passwort", type='password', key='password')
@@ -163,7 +163,7 @@ def change_pwd():
         else:
             st.error(msg)
 
-def logout():
+def logout() -> None:
     for key in st.session_state.keys():
         del st.session_state[key]
     st.rerun()
