@@ -1,6 +1,12 @@
 import duckdb
 import pandas as pd
 from argon2 import PasswordHasher
+import streamlit as st
+from supabase import create_client
+
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase = create_client(url, key)
 
 ph = PasswordHasher()
 
@@ -69,7 +75,7 @@ def create_cols_map_in_table():
                     spalte_db VARCHAR NOT NULL)""")
 
         data = {'spalte_input_datei': ['Brand', 'Product', 'Code', 'Your Price', 'Tags', 'Cost Price',
-                                       'Rival Best Price', 'Your Diff.' ],
+                                       'Rival Best Price', 'Your Diff.'],
                 'spalte_db': ['brand', 'product', 'code', 'your_price', 'tags', 'cost_price',
                                        'rival_best_price', 'your_difference']}
 
@@ -94,101 +100,156 @@ def create_cols_map_out_table():
         df = pd.DataFrame(data=data)
         con.sql(f"CREATE OR REPLACE TABLE cols_map_out AS SELECT * FROM df")
 
+def insert_on_app_start():
+    if len(select("user")) == 0:
+        d = {'user_id': [0],
+             'vorname': ['Charbel'],
+             'nachname': ['Chougourou'],
+             'email': ['admin'],
+             'password': [ph.hash('test')],
+             'profil': ['Super User'],
+             'freigeschaltet': ['true']}
+        data = pd.DataFrame(data=d)
+        insert("user", data)
 
-def statement(stm: str, connect_to='file') -> pd.DataFrame:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        return con.sql(stm).df()
-
-
-def select(table: str, connect_to='file', cols=None) -> pd.DataFrame:
+def select(table: str, cols=None) -> pd.DataFrame:
     if cols is None:
         cols = []
-    with duckdb.connect(f"{connect_to}.db") as con:
-        return con.sql(f"""SELECT {','.join(cols) if cols else '*'} FROM {table}""").df()
+    res = (
+        supabase.table(table)
+        .select(','.join(cols) if cols else '*')
+        .execute()
+    )
+    res_df = pd.DataFrame(res.data)
+    if res_df.empty:
+        res_df = pd.DataFrame(columns=cols if cols else get_tab_cols(table))
+    return res_df
+
+
+def select_count(table: str) -> int:
+    res = supabase.table(table).select("*", count="exact").execute()
+    return res.count
 
 
 def select_distinct(table: str, cols: list) -> pd.DataFrame:
-    with duckdb.connect("file.db") as con:
-        return con.sql(f"""SELECT distinct {','.join(cols)} FROM {table}""").df()
+    response = (
+        supabase.table(table)
+        .select(','.join(cols))
+        .execute()
+    )
+    db_df = pd.DataFrame(response.data)
+    db_df = db_df.drop_duplicates()
+    if db_df.empty:
+        db_df = pd.DataFrame(columns=cols)
+    return db_df
 
 
-def select_where(table: str, col_value: dict, cols=None, connect_to='file') -> pd.DataFrame:
-    if cols is None:
-        cols = []
-    with duckdb.connect(f"{connect_to}.db") as con:
-        return con.sql(f"""
-            SELECT {','.join(cols) if cols else '*'} 
-            FROM {table} WHERE {" AND ".join([f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}" 
-                                              for k, v in col_value.items()])}""").df()
+def select_where(table: str, col_value: dict, cols=None) -> pd.DataFrame:
+    query = supabase.table(table).select(','.join(cols) if cols else '*')
+    for k, v in col_value.items():
+        query = query.eq(k, v)
+    res = query.execute()
+    res_df = pd.DataFrame(res.data)
+    if res_df.empty:
+        res_df = pd.DataFrame(columns=cols if cols else get_tab_cols(table))
+    return res_df
 
 
-def insert(table: str, data: pd.DataFrame, connect_to='file') -> bool:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        try:
-            con.sql(f"INSERT INTO {table} BY NAME SELECT * FROM data")
-            return True
-        except Exception as ex:
-            return False
+def get_tab_cols(table: str) -> list:
+    res = supabase.rpc("get_columns", {"tablename": table}).execute()
+    return [r["column_name"] for r in res.data]
 
-def update(table: str, data: pd.DataFrame, connect_to='file') -> bool:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        try:
-            con.sql(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM data")
-            return True
-        except Exception as ex:
-            return False
 
-def update_where(table: str, cols_update, col_search_value: dict, connect_to='file') -> bool:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        try:
-            con.sql(f"""
-                        UPDATE {table} SET {','.join([f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                                                          for k, v in cols_update.items()])} 
-                        WHERE {" AND ".join([f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                                                          for k, v in col_search_value.items()])}""")
-            return True
-        except Exception as ex:
-            return False
+def insert(table: str, data: pd.DataFrame) -> bool:
+    data = data.copy()
+    for col in data.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns:
+        data[col] = data[col].astype(str)
+    data = data.to_dict(orient="records")
+    res = supabase.table(table).insert(data).execute()
+    if res.data:
+        return True
+    return False
 
-def delete(table: str, connect_to='file') -> bool:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        try:
-            con.sql(f"""DELETE FROM {table}""")
-            return True
-        except Exception as ex:
-            return False
 
-def delete_where(table: str, col_value: dict, connect_to='file') -> bool:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        try:
-            con.sql(f"""DELETE FROM {table} WHERE {" AND ".join([f"{k} = {v}" for k, v in col_value.items()])}""")
-            return True
-        except Exception as ex:
-            return False
+def update(table: str, key_col: str, values_to_update: dict) -> bool:
+    successful = []
+    for row_id, updates in values_to_update.items():
+        res = (
+            supabase.table(table)
+            .update(updates)
+            .eq(key_col, row_id)
+            .execute()
+        )
+        if res.data:
+            successful.append(True)
+    if False not in successful:
+        return True
+    return False
 
-def delete_where_in(table: str, col: str , values: list, connect_to='file') -> bool:
-    with duckdb.connect(f"{connect_to}.db") as con:
-        try:
-            con.sql(f"""DELETE FROM {table} WHERE {col} in ({", ".join(str(e) for e in values)})""")
-            return True
-        except Exception as ex:
-            return False
+
+def update_where(table: str, cols_update, col_search_value: dict) -> bool:
+    query = supabase.table(table).update(cols_update)
+    for k, v in col_search_value.items():
+        query = query.eq(k, v)
+    res = query.execute()
+    if res:
+        return True
+    return False
+
+
+def delete(table: str) -> bool:
+    res = supabase.table(table).delete().execute()
+    if res:
+        return True
+    return False
+
+
+def delete_where(table: str, col_value: dict) -> bool:
+    query = supabase.table(table).delete()
+    for k, v in col_value.items():
+        query = query.eq(k, v)
+    res = query.execute()
+    if res:
+        return True
+    return False
+
+
+def delete_where_in(table: str, col: str, values: list) -> bool:
+    query = supabase.table(table).delete()
+    for v in values:
+        query = query.eq(col, v)
+    res = query.execute()
+    if res:
+        return True
+    return False
+
 
 def delete_where_data_df(table: str, df_col_value: pd.DataFrame) -> bool:
-    with duckdb.connect("file.db") as con:
-        try:
-            for i in range(df_col_value.shape[0]):
-                row = df_col_value.iloc[i]
-                where_clause = " AND ".join(
-                    f"{col} = '{row[col]}'" if isinstance(row[col], str) else f"{col} = {row[col]}"
-                    for col in row.index
-                )
-                con.sql(f"""DELETE FROM {table} WHERE {where_clause}""")
-                con.sql(f"""DELETE FROM {'out_prices'} WHERE {where_clause}""")
+    if not df_col_value.empty:
+        data = df_col_value.to_dict(orient="records")
+        condition = ",".join([
+            f"and({df_col_value.columns[0]}.eq.{jahr_kw['jahr']},{df_col_value.columns[1]}.eq.{jahr_kw['kalenderwoche']})"
+            for jahr_kw in data
+        ])
+        res = (
+            supabase.table(table)
+            .delete()
+            .or_(condition)
+            .execute()
+        )
+        if res:
             return True
-        except Exception as ex:
-            print(ex)
-            return False
+        return False
+
+
+def delete_greater(table: str, col_value: dict) -> bool:
+    query = supabase.table(table).delete()
+    for k, v in col_value.items():
+        query = query.gt(k, v)
+    res = query.execute()
+    if res:
+        return True
+    return False
 
 
 def speichern_in_db(data: pd.DataFrame, table: str) -> (bool, str):
@@ -199,9 +260,7 @@ def speichern_in_db(data: pd.DataFrame, table: str) -> (bool, str):
             for col in data.columns:
                 if not data.loc[data.duplicated(subset=[col])].empty:
                     return False, f'Doppelter Wert in Spalte: {col}. Bitte überprüfen'
-            with duckdb.connect("file.db") as con:
-                con.sql(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM data")
-                return True, 'Daten gespeichert'
+
     else:
         return False, 'Keine Daten eingefügt'
 

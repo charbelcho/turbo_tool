@@ -17,14 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"  # optional
 )
 
-db_functions.create_user_table()
-db_functions.create_in_table()
-db_functions.create_out_table()
-db_functions.create_cols_map_in_table()
-db_functions.create_cols_map_out_table()
-
-
-
+db_functions.insert_on_app_start()
 
 def require_login() -> None:
     if not st.session_state.logged_in:
@@ -33,7 +26,7 @@ def require_login() -> None:
 
 
 def validate_mail_password(email: str, passwort: str) -> (bool, str, User | None):
-    users = db_functions.select_where(table='user', col_value={'email': email}, connect_to='user')
+    users = db_functions.select_where(table='user', col_value={'email': email})
     if users.empty:
         msg = "Kein Benutzer mit dieser Mail vergeben"
         return False, msg, None
@@ -51,7 +44,7 @@ def validate_mail_password(email: str, passwort: str) -> (bool, str, User | None
 
 
 def validate_registration(email: str, vorname: str, nachname: str, passwort: str, passwort_wiederholen: str) -> (bool, str):
-    users = db_functions.select_where(table='user', col_value={'email': email}, connect_to='user')
+    users = db_functions.select_where(table='user', col_value={'email': email})
     if not users.empty:
         msg = "Bereits ein Benutzer mit dieser Mail vergeben"
         return False, msg
@@ -66,12 +59,12 @@ def validate_registration(email: str, vorname: str, nachname: str, passwort: str
         return False, msg
     else:
         try:
-            users_db = db_functions.statement("select count(*) as count from user", connect_to='user')
+            users_db = db_functions.select_count("user")
             d = {'vorname': [vorname], 'nachname': [nachname], 'email': [email], 'password': [ph.hash(passwort)],
-                 'profil': ['Admin' if users_db.iloc[0]['count'] == 1 else 'User'],
-                 'freigeschaltet': ['true' if users_db.iloc[0]['count'] == 1 else 'false']}
+                 'profil': ['Admin' if users_db == 1 else 'User'],
+                 'freigeschaltet': ['true' if users_db == 1 else 'false']}
             data = pd.DataFrame(data=d)
-            registration_successful = db_functions.insert(table='user', data=data, connect_to='user')
+            registration_successful = db_functions.insert(table='user', data=data)
             if registration_successful:
                 msg = "✅ Registrierung erfolgreich"
                 return True, msg
@@ -92,14 +85,12 @@ def validate_edit_passwort(email: str, passwort: str , passwort_wiederholen: str
         return False, msg
     else:
         try:
-            user_data = db_functions.select_where(table='user', col_value={'email': email}, cols=['user_index'],
-                                                  connect_to='user')
-            user_index = user_data.iloc[0]['user_index'] if not user_data.empty else np.nan
+            user_data = db_functions.select_where(table='user', col_value={'email': email}, cols=['user_id'])
+            user_id = user_data.iloc[0]['user_id'] if not user_data.empty else np.nan
             pwd_change_successful = db_functions.update_where(
                 table='user',
                 cols_update={'password': ph.hash(passwort)},
-                col_search_value={'user_index': user_index},
-                connect_to='user')
+                col_search_value={'user_id': user_id})
             if pwd_change_successful:
                 msg = "✅ Passwort geändert"
                 return True, msg
@@ -121,8 +112,7 @@ def login() -> None:
             st.session_state.logged_in_user = user
             if st.session_state.logged_in_user.profil == 'Admin' and not db_functions.select_where(
                     table='user',
-                    col_value={'freigeschaltet': 'true'},
-                    connect_to='user').empty:
+                    col_value={'freigeschaltet': True}).empty:
                 st.switch_page('user_administration.py')
             else:
                 st.switch_page('home.py')
@@ -176,7 +166,7 @@ sideb = st.sidebar
 
 if st.session_state.logged_in and 'logged_in_user' in st.session_state:
     if st.session_state.logged_in_user.profil == 'Admin' or st.session_state.logged_in_user.profil == 'Super User':
-        neue_user = len(db_functions.select_where(table='user', col_value={'freigeschaltet': False}, connect_to='user'))
+        neue_user = len(db_functions.select_where(table='user', col_value={'freigeschaltet': False}))
 
         col1, col2 = sideb.columns([5, 1])
         if neue_user > 0:

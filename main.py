@@ -1,7 +1,6 @@
 import base64
 import io
 from typing import Any
-import duckdb
 
 import pandas as pd
 import datetime as dt
@@ -27,8 +26,7 @@ def read_file_turbo(filecontent: Any, woche: int, jahr: int) -> None | Exception
     input_df['jahr'] = jahr
 
     if not input_df.empty:
-        with duckdb.connect("file.db") as con:
-            con.sql("INSERT INTO in_prices BY NAME SELECT * FROM input_df")
+        db_functions.insert('in_prices', data=input_df)
 
 
 def daten_fuer_kw_anzeigen(woche: int, jahr: int, from_in_table=True) -> pd.DataFrame:
@@ -38,16 +36,11 @@ def daten_fuer_kw_anzeigen(woche: int, jahr: int, from_in_table=True) -> pd.Data
         woche = current_jahr_df['max_kw'].iloc[0]
     if woche < 1:
         woche = jahr_kw_df.loc[jahr_kw_df['jahr'] == jahr - 1]['max_kw'].iloc[0]
-    with duckdb.connect("file.db") as con:
-        data_from_db = con.execute(f"""
-                            SELECT 
-                                * 
-                            FROM 
-                                {'in_prices' if from_in_table else 'out_prices'} 
-                            WHERE kalenderwoche = ? and jahr = ?""", [woche, jahr]).df()
+    data_from_db = db_functions.select_where(
+        table='in_prices' if from_in_table else 'out_prices',
+        col_value={"kalenderwoche": woche, "jahr": jahr})
 
-        data_from_db = data_from_db.drop(columns=['in_prices_index' if from_in_table else 'out_prices_index'])
-        return data_from_db
+    return data_from_db
 
 
 def transform_data_to_output(woche: int, jahr: int) -> None:
@@ -72,12 +65,12 @@ def transform_data_to_output(woche: int, jahr: int) -> None:
     output_df = output_df.drop(columns=['tags', 'hochgeladen_am'])
 
     if not output_df.empty:
-        with duckdb.connect("file.db") as con:
-            con.sql("INSERT INTO out_prices BY NAME SELECT * FROM output_df")
+        db_functions.insert('out_prices', output_df)
 
 
 def prepare_date_for_excel(woche: int, jahr: int) -> io.BytesIO:
     excel_data = daten_fuer_kw_anzeigen(woche, jahr, from_in_table=False)
+
     price_cols = ['meesenburg_vk', 'ynek', 'vprs', 'ykbn', 'bester_wettbewerber_vk', 'preis_vorherige_kw']
 
     excel_data['preis_vorherige_kw'] = excel_data['preis_vorherige_kw'].fillna('')
@@ -236,6 +229,3 @@ def download_excel(excel_buffer: io.BytesIO, excel_name: str) -> str:
         """
     return js
 
-
-if __name__ == '__main__':
-    user_data = db_functions.select(table='user', connect_to='user')
