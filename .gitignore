@@ -43,6 +43,7 @@ Thumbs.db
 
 # Streamlit Cache
 .streamlit/
+*.toml
 # Byte-compiled / optimized / DLL files
 *.py[codz]
 *$py.class

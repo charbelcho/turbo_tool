@@ -25,7 +25,7 @@ def start_streamlit():
     global streamlit_process
 
     if not is_streamlit_running():
-        cmd = [sys.executable, "-m", "streamlit", "run", "app.py",
+        cmd = [sys.executable, "-m", ".streamlit", "run", "app.py",
                "--server.headless=true", "--server.port=8501"]
         streamlit_process = subprocess.Popen(cmd)
         print("Streamlit wird gestartet...")

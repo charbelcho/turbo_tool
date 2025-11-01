@@ -1,8 +1,9 @@
 import time
 
-import duckdb
 import pandas as pd
 import streamlit as st
+import supabase
+from supabase import create_client
 
 import db_functions
 import main
@@ -11,9 +12,21 @@ from app import PAGE_DATEN_LOESCHEN, require_login
 
 require_login()
 
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase = create_client(url, key)
+
 def select_distinct(table: str, cols: list) -> pd.DataFrame:
-    with duckdb.connect("file.db") as con:
-        return con.sql(f"""SELECT distinct {','.join(cols)} FROM {table}""").df()
+    response = (
+        supabase.table(table)
+            .select(','.join(cols))
+            .execute()
+    )
+    db_df = pd.DataFrame(response.data)
+    db_df = db_df.drop_duplicates()
+    if db_df.empty:
+        db_df = pd.DataFrame(columns=cols)
+    return db_df
 
 
 if 'daten' not in st.session_state or st.session_state.daten.empty:
@@ -78,17 +91,21 @@ if not st.session_state.daten.empty:
     daten_loeschen = col2.button(f'Ausgewählte Daten löschen', use_container_width=True)
     if daten_loeschen:
         selected_df = delete_df.loc[delete_df['delete']]
-        delete_from_in_prices = db_functions.delete_where_data_df('in_prices', selected_df[['jahr', 'kalenderwoche']])
-        delete_from_out_prices = db_functions.delete_where_data_df('out_prices', selected_df[['jahr', 'kalenderwoche']])
-        if delete_from_in_prices and delete_from_out_prices:
-            st.success('Die Daten wurden erfolgreich gelöscht')
+        if not selected_df.empty:
+            delete_from_in_prices = db_functions.delete_where_data_df('in_prices', selected_df[['jahr', 'kalenderwoche']])
+            delete_from_out_prices = db_functions.delete_where_data_df('out_prices', selected_df[['jahr', 'kalenderwoche']])
+            if delete_from_in_prices and delete_from_out_prices:
+                st.success('Die Daten wurden erfolgreich gelöscht')
+            else:
+                st.error('Fehler beim Löschen der Daten')
+            st.session_state.daten = db_functions.select_distinct('in_prices', ['jahr', 'kalenderwoche']).sort_values(
+                ['jahr', 'kalenderwoche'], ascending=[False, False])
+            st.session_state.daten['delete'] = False
+            time.sleep(1)
+            st.rerun()
         else:
-            st.error('Fehler beim Löschen der Daten')
-        st.session_state.daten = db_functions.select_distinct('in_prices', ['jahr', 'kalenderwoche']).sort_values(
-            ['jahr', 'kalenderwoche'], ascending=[False, False])
-        st.session_state.daten['delete'] = False
-        time.sleep(1)
-        st.rerun()
+            st.success('Keine Daten ausgewählt')
+
 
     alle_daten_loeschen = col2.button(f'Alle Daten löschen', use_container_width=True)
     if alle_daten_loeschen:

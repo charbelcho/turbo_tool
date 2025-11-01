@@ -1,5 +1,6 @@
-import os
+
 import time
+from collections import defaultdict
 
 import pandas as pd
 import streamlit as st
@@ -18,8 +19,8 @@ class Profile:
 
 
 def load_user():
-    user_data = db_functions.select(table='user', connect_to='user')
-    user_data = user_data.loc[user_data['user_index'] > 0]
+    user_data = db_functions.select(table='user').sort_values(by='user_id')
+    user_data = user_data.loc[user_data['user_id'] > 0]
     st.session_state.orig_user_df = user_data
     if not user_data.empty:
         user_data = user_data.drop(columns=['password'])
@@ -28,6 +29,26 @@ def load_user():
 
 
 load_user()
+
+def identify_rows_cols_to_update(original_df, update_df, key_col) -> dict:
+    original_df = original_df.loc[original_df[key_col].isin(update_df[key_col])]
+    update_df = update_df.loc[update_df[key_col].isin(original_df[key_col])]
+    original_df = original_df.sort_values(by=key_col, ascending=True).set_index(key_col)
+    update_df = update_df.sort_values(by=key_col, ascending=True).set_index(key_col)
+    original_df, update_df = original_df.align(update_df, join="outer", axis=1)
+
+    mask = original_df != update_df
+    diffs = []
+    for row, col in zip(*mask.to_numpy().nonzero()):
+        diffs.append({
+            key_col: row,
+            "column": update_df.columns[col],
+            "new_value": update_df.iat[row, col]
+        })
+    grouped = defaultdict(dict)
+    for change in diffs:
+        grouped[change[key_col]][change["column"]] = change["new_value"]
+    return grouped
 
 
 def after_speichern(successful):
@@ -49,7 +70,7 @@ if 'logged_in_user' in st.session_state:
                     options=[Profile.ADMIN, Profile.USER]
                 )
             },
-            disabled=['user_index', 'password'],
+            disabled=['user_id', 'password'],
             hide_index=True,
             num_rows='fixed',
             key='user_editor'
@@ -65,34 +86,35 @@ if 'logged_in_user' in st.session_state:
                 st.session_state.user_editor['deleted_rows']) == 0):
                 st.info('Daten unverändert.')
             else:
-                if not user_df.loc[user_df['user_index'] == 1].iloc[0]['freigeschaltet']:
-                    user_df.loc[user_df['user_index'] == 1, 'freigeschaltet'] = True
+                if not user_df.loc[user_df['user_id'] == user_df['user_id'].min()].iloc[0]['freigeschaltet']:
+                    user_df.loc[user_df['user_id'] == user_df['user_id'].min(), 'freigeschaltet'] = True
                 merged_user_df = pd.merge(st.session_state.orig_user_df, user_df,
                                           how='inner',
-                                          on='user_index',
+                                          on='user_id',
                                           suffixes=('', '_gui'))
                 merged_user_df = merged_user_df[
-                    ['user_index', 'vorname_gui', 'nachname_gui', 'email_gui', 'password', 'profil_gui', 'freigeschaltet_gui']]
+                    ['user_id', 'vorname_gui', 'nachname_gui', 'email_gui', 'password', 'profil_gui', 'freigeschaltet_gui']]
                 merged_user_df.columns = [c.replace("_gui", "") for c in merged_user_df.columns]
-                super_user = db_functions.select_where(table='user', col_value={'user_index': 0}, connect_to='user')
-                merged_user_df = pd.concat([super_user, merged_user_df])
-                update_successful = db_functions.update(table='user', data=merged_user_df, connect_to='user')
+
+                identified_rows_to_update = identify_rows_cols_to_update(st.session_state.orig_user_df, merged_user_df,
+                                                                         'user_id')
+                update_successful = db_functions.update(table='user', key_col='user_id', values_to_update=identified_rows_to_update)
                 after_speichern(update_successful)
 
         alle_freischalten = col2.button('Alle freischalten', use_container_width=True)
         if alle_freischalten:
             merged_user_df = pd.merge(st.session_state.orig_user_df, user_df,
                                       how='inner',
-                                      on='user_index',
+                                      on='user_id',
                                       suffixes=('', '_gui'))
             merged_user_df = merged_user_df[
-                ['user_index', 'vorname_gui', 'nachname_gui', 'email_gui', 'password', 'profil_gui',
+                ['user_id', 'vorname_gui', 'nachname_gui', 'email_gui', 'password', 'profil_gui',
                  'freigeschaltet_gui']]
-            merged_user_df['freigeschaltet_gui'] = True
+            merged_user_df['freigeschaltet_gui'] = 'true'
             merged_user_df.columns = [c.replace("_gui", "") for c in merged_user_df.columns]
-            super_user = db_functions.select_where('user', {'user_index': 0}, 'user')
-            merged_user_df = pd.concat([super_user, merged_user_df])
-            update_successful = db_functions.update(table='user', data=merged_user_df, connect_to='user')
+
+            identified_rows_to_update = identify_rows_cols_to_update(st.session_state.orig_user_df, merged_user_df, 'user_id')
+            update_successful = db_functions.update(table='user', key_col='user_id', values_to_update=identified_rows_to_update)
             after_speichern(update_successful)
 
         auswahl_loeschen = col3.button('Ausgewählte löschen', use_container_width=True)
@@ -100,8 +122,8 @@ if 'logged_in_user' in st.session_state:
             if user_df.loc[user_df[""]].empty:
                 st.info("Keine User ausgewählt")
             else:
-                user_indezes = user_df.loc[user_df[""]]['user_index'].to_list()
-                delete_succesful = db_functions.delete_where_in('user', 'user_index', user_indezes, 'user')
+                user_indezes = user_df.loc[user_df[""]]['user_id'].to_list()
+                delete_succesful = db_functions.delete_where_in('user', 'user_id', user_indezes)
                 if delete_succesful:
                     st.success("User erfolgreich gelöscht")
                 else:
@@ -114,7 +136,7 @@ if 'logged_in_user' in st.session_state:
 
         alle_loeschen = col4.button('Alle löschen', use_container_width=True)
         if alle_loeschen:
-            os.remove('./user.db')
+            delete_succesful = db_functions.delete_greater('user', {'user_id': 0})
             for key in st.session_state.keys():
                 del st.session_state[key]
             st.rerun()
